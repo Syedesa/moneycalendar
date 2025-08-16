@@ -22,7 +22,7 @@
     <header class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
       <div>
         <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">MoneyCal</h1>
-        <p class="text-slate-500">Calendar-based tracker for your daily earnings and expenses. Now with per‑hour jobs & timings.</p>
+        <p class="text-slate-500">Calendar-based tracker for your daily earnings and expenses. Now with per-hour jobs & timings.</p>
       </div>
       <div class="flex items-center gap-2">
         <button id="btn-export-json" class="px-3 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow">Export JSON</button>
@@ -96,6 +96,13 @@
             Income: <span id="ytd-income" class="font-medium">£0</span> · Expenses: <span id="ytd-expenses" class="font-medium">£0</span> · Net: <span id="ytd-net" class="font-medium">£0</span>
           </div>
         </div>
+
+        <!-- Budgets this month -->
+        <div class="rounded-xl bg-slate-50 p-3">
+          <div class="text-sm text-slate-600 mb-1">Budgets this month</div>
+          <ul id="budgets-list" class="space-y-1 text-sm"></ul>
+          <p id="budgets-empty" class="text-xs text-slate-400 mt-1 hidden">No category limits set. Add them in Settings.</p>
+        </div>
       </aside>
     </section>
 
@@ -118,7 +125,7 @@
             </select>
           </div>
           <div>
-            <label class="block text-sm text-slate-600">Amount (£)</label>
+            <label class="block text-sm text-slate-600">Amount (<span id="currency-label">£</span>)</label>
             <input id="amount" type="number" step="0.01" min="0" required class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
             <p class="text-[11px] text-slate-500 mt-1">If you enter <span class="kbd">Rate</span> + <span class="kbd">Start</span>/<span class="kbd">End</span>, amount auto-calculates.</p>
           </div>
@@ -140,7 +147,7 @@
               <input id="job" placeholder="Uber, Warehouse, Deliveroo…" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
             </div>
             <div>
-              <label class="block text-sm text-slate-600">Rate (£/hr)</label>
+              <label class="block text-sm text-slate-600">Rate (<span id="currency-label-rate">£</span>/hr)</label>
               <input id="rate" type="number" step="0.01" min="0" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
             </div>
             <div>
@@ -176,12 +183,30 @@
         </div>
         <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm text-slate-600">Monthly Savings Target (£)</label>
-            <input id="savings-target" type="number" step="1" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" placeholder="700" />
+            <label class="block text-sm text-slate-600">Monthly Savings Target</label>
+            <div class="flex items-center gap-2">
+              <span id="settings-currency-left" class="text-slate-500">£</span>
+              <input id="savings-target" type="number" step="1" class="w-full px-3 py-2 rounded-xl border border-slate-300" placeholder="700" />
+            </div>
           </div>
           <div>
             <label class="block text-sm text-slate-600">Default Categories (comma-separated)</label>
             <input id="default-categories" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" placeholder="Rent, Food, Utilities, Transport, Study, Health, Personal, Uber, Warehouse" />
+          </div>
+
+          <div>
+            <label class="block text-sm text-slate-600">Currency</label>
+            <select id="currency-select" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300">
+              <option value="GBP">GBP (£)</option>
+              <option value="USD">USD ($)</option>
+              <option value="INR">INR (₹)</option>
+            </select>
+          </div>
+
+          <div class="sm:col-span-2">
+            <label class="block text-sm text-slate-600">Category Limits (monthly)</label>
+            <textarea id="category-limits" rows="3" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" placeholder="Example: Food=250, Transport=120, Rent=1200"></textarea>
+            <p class="text-[11px] text-slate-500 mt-1">Format: <span class="kbd">Name=Amount</span> separated by commas or new lines. Only categories with limits are shown in summary.</p>
           </div>
         </div>
         <div class="mt-5 flex items-center justify-end gap-2">
@@ -212,11 +237,22 @@
       return [];
     }
     function saveEntries(entries) { localStorage.setItem(LS_KEY, JSON.stringify(entries)); }
+
     function loadPrefs() {
       const raw = localStorage.getItem(LS_PREF);
-      return raw ? JSON.parse(raw) : { savingsTarget: 700, categories: ['Rent','Food','Utilities','Transport','Study','Health','Personal','Savings','Uber','Warehouse'] };
+      return raw ? JSON.parse(raw) : {
+        savingsTarget: 700,
+        categories: ['Rent','Food','Utilities','Transport','Study','Health','Personal','Savings','Uber','Warehouse'],
+        currency: 'GBP',
+        categoryLimits: {} // { Food: 250, Transport: 120 }
+      };
     }
     function savePrefs(prefs) { localStorage.setItem(LS_PREF, JSON.stringify(prefs)); }
+
+    // === Currency helpers ===
+    const CURRENCY_SYMBOLS = { GBP: '£', USD: '$', INR: '₹' };
+    function curSym(){ return CURRENCY_SYMBOLS[(state.prefs && state.prefs.currency) || 'GBP'] || '£'; }
+    function fmtMoney(n, withC=true, digits=2){ const v = (Number(n)||0).toFixed(digits); return withC ? `${curSym()}${v}` : v; }
 
     // === Date Utilities ===
     function fmtDateISO(d) { return d.toISOString().slice(0,10); }
@@ -245,6 +281,8 @@
     const ytdNetEl = document.getElementById('ytd-net');
     const sumTargetEl = document.getElementById('sum-target');
     const targetBadge = document.getElementById('target-badge');
+    const budgetsList = document.getElementById('budgets-list');
+    const budgetsEmpty = document.getElementById('budgets-empty');
 
     // Drawer
     const drawer = document.getElementById('day-drawer');
@@ -258,6 +296,8 @@
     const incomeOnly = document.getElementById('income-only');
     const typeSelect = document.getElementById('type');
     const amountInput = document.getElementById('amount');
+    const currencyLabel = document.getElementById('currency-label');
+    const currencyLabelRate = document.getElementById('currency-label-rate');
     const categoryInput = document.getElementById('category');
     const noteInput = document.getElementById('note');
     const jobInput = document.getElementById('job');
@@ -269,6 +309,9 @@
     const settingsModal = document.getElementById('settings-modal');
     const savingsTargetInput = document.getElementById('savings-target');
     const defaultCategoriesInput = document.getElementById('default-categories');
+    const currencySelect = document.getElementById('currency-select');
+    const categoryLimitsInput = document.getElementById('category-limits');
+    const settingsCurrencyLeft = document.getElementById('settings-currency-left');
 
     // === Rendering ===
     function renderMonth() {
@@ -321,7 +364,7 @@
           const badge = document.createElement('div');
           const inc = map[iso].income; const exp = map[iso].expense;
           badge.className = 'absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 border border-slate-200';
-          badge.textContent = `+£${inc.toFixed(0)} / -£${exp.toFixed(0)}`;
+          badge.textContent = `+${curSym()}${inc.toFixed(0)} / -${curSym()}${exp.toFixed(0)}`;
           wrapper.appendChild(badge);
         }
 
@@ -338,6 +381,57 @@
       });
     }
 
+    function totalsByCategoryThisMonth(){
+      const y = state.cursor.getFullYear();
+      const m = state.cursor.getMonth();
+      const map = {}; // {cat: {income, expense}}
+      for (const e of state.entries) {
+        const d = new Date(e.date);
+        if (d.getFullYear()===y && d.getMonth()===m) {
+          const cat = (e.category||'').trim() || '—';
+          if (!map[cat]) map[cat] = { income:0, expense:0 };
+          map[cat][e.type] += Number(e.amount)||0;
+        }
+      }
+      return map;
+    }
+
+    function renderBudgets(){
+      const limits = state.prefs.categoryLimits || {};
+      const catTotals = totalsByCategoryThisMonth();
+
+      budgetsList.innerHTML = '';
+      const limitKeys = Object.keys(limits);
+      if (limitKeys.length === 0) {
+        budgetsEmpty.classList.remove('hidden');
+        return;
+      } else {
+        budgetsEmpty.classList.add('hidden');
+      }
+
+      // Show only categories that have a limit
+      for (const name of limitKeys) {
+        const limit = Number(limits[name]) || 0;
+        const spent = (catTotals[name]?.expense || 0);
+        const left = limit - spent;
+        const li = document.createElement('li');
+        const over = left < 0;
+
+        li.className = 'flex items-center justify-between rounded-lg px-2 py-1 ' + (over ? 'bg-rose-50' : 'bg-white');
+
+        const label = document.createElement('div');
+        label.className = 'text-slate-600';
+        label.textContent = name;
+
+        const nums = document.createElement('div');
+        nums.className = 'text-xs';
+        nums.innerHTML = `${fmtMoney(spent)} / ${fmtMoney(limit)} ${over ? `<span class="ml-1 px-1 rounded bg-rose-100 text-rose-700">Over by ${fmtMoney(-left)}</span>` : `<span class="ml-1 px-1 rounded bg-emerald-100 text-emerald-700">Left ${fmtMoney(left)}</span>`}`;
+
+        li.append(label, nums);
+        budgetsList.appendChild(li);
+      }
+    }
+
     function renderSummary() {
       const y = state.cursor.getFullYear();
       const m = state.cursor.getMonth();
@@ -348,14 +442,14 @@
         const amt = Number(e.amount)||0;
         if (e.type==='income') income += amt; else expenses += amt;
       }
-      sumIncomeEl.textContent = `£${income.toFixed(2)}`;
-      sumExpensesEl.textContent = `£${expenses.toFixed(2)}`;
-      sumNetEl.textContent = `£${(income - expenses).toFixed(2)}`;
+      sumIncomeEl.textContent = fmtMoney(income);
+      sumExpensesEl.textContent = fmtMoney(expenses);
+      sumNetEl.textContent = fmtMoney(income - expenses);
 
       // Weekly averages (approx 4.345 weeks per month for better avg)
       const weeks = 4.345;
-      avgWeekIncomeEl.textContent = `£${(income/weeks).toFixed(2)}`;
-      avgWeekExpensesEl.textContent = `£${(expenses/weeks).toFixed(2)}`;
+      avgWeekIncomeEl.textContent = fmtMoney(income/weeks);
+      avgWeekExpensesEl.textContent = fmtMoney(expenses/weeks);
 
       // YTD
       const startYear = new Date(y, 0, 1);
@@ -367,13 +461,16 @@
           if (e.type==='income') yi += Number(e.amount)||0; else ye += Number(e.amount)||0;
         }
       }
-      ytdIncomeEl.textContent = `£${yi.toFixed(2)}`;
-      ytdExpensesEl.textContent = `£${ye.toFixed(2)}`;
-      ytdNetEl.textContent = `£${(yi-ye).toFixed(2)}`;
+      ytdIncomeEl.textContent = fmtMoney(yi);
+      ytdExpensesEl.textContent = fmtMoney(ye);
+      ytdNetEl.textContent = fmtMoney(yi-ye);
 
       // Target
-      sumTargetEl.textContent = `£${Number(state.prefs.savingsTarget||700).toFixed(0)}`;
+      sumTargetEl.textContent = fmtMoney(Number(state.prefs.savingsTarget||700), true, 0);
       targetBadge.textContent = state.prefs.savingsTarget ? 'Custom' : 'Default';
+
+      renderBudgets();
+      updateCurrencyLabels();
     }
 
     // Drawer logic
@@ -403,10 +500,11 @@
         const li = document.createElement('li');
         li.className = 'border border-slate-200 rounded-xl p-2 flex items-center justify-between';
         const left = document.createElement('div');
-        const line1 = `${e.type==='income'?'+':'-'}£${Number(e.amount).toFixed(2)} · ${e.category||'—'}`;
+        const sign = e.type==='income' ? '+' : '-';
+        const line1 = `${sign}${fmtMoney(Number(e.amount))} · ${e.category||'—'}`;
         const extra = [];
         if (e.job) extra.push(e.job);
-        if (e.rate) extra.push(`£${Number(e.rate).toFixed(2)}/hr`);
+        if (e.rate) extra.push(`${fmtMoney(Number(e.rate))}/hr`);
         if (e.startTime && e.endTime) extra.push(`${e.startTime}–${e.endTime}${e.hours?` (${e.hours.toFixed(2)}h)`:''}`);
         const line2 = [extra.join(' · '), e.note].filter(Boolean).join(' — ');
         left.innerHTML = `
@@ -539,12 +637,42 @@
       const p = state.prefs || {};
       savingsTargetInput.value = p.savingsTarget ?? 700;
       defaultCategoriesInput.value = (p.categories||[]).join(', ');
+      currencySelect.value = p.currency || 'GBP';
+      settingsCurrencyLeft.textContent = curSym();
+      // fill category limits
+      const cl = p.categoryLimits || {};
+      const pairs = Object.keys(cl).map(k => `${k}=${cl[k]}`);
+      categoryLimitsInput.value = pairs.join(', ');
       settingsModal.classList.remove('hidden');
     });
+
     document.getElementById('save-settings').addEventListener('click', ()=>{
       const target = parseFloat(savingsTargetInput.value || '700');
       const cats = defaultCategoriesInput.value.split(',').map(s=>s.trim()).filter(Boolean);
-      state.prefs = { savingsTarget: target, categories: cats.length?cats:state.prefs.categories };
+      const currency = currencySelect.value || 'GBP';
+      const limitsRaw = categoryLimitsInput.value;
+
+      const categoryLimits = {};
+      if (limitsRaw && limitsRaw.trim()) {
+        // split by commas or new lines
+        limitsRaw.split(/[,|\n]/).forEach(piece=>{
+          const s = piece.trim();
+          if (!s) return;
+          const m = s.split('=');
+          if (m.length>=2) {
+            const name = m[0].trim();
+            const val = parseFloat(m.slice(1).join('=').trim());
+            if (name && !isNaN(val)) categoryLimits[name] = val;
+          }
+        });
+      }
+
+      state.prefs = {
+        savingsTarget: target,
+        categories: cats.length?cats:state.prefs.categories,
+        currency,
+        categoryLimits
+      };
       savePrefs(state.prefs);
       settingsModal.classList.add('hidden');
       renderSummary();
@@ -648,9 +776,15 @@
       [...cats].sort().forEach(c=>{ const opt = document.createElement('option'); opt.value = c; dl.appendChild(opt); });
     }
 
+    function updateCurrencyLabels(){
+      const sym = curSym();
+      if (currencyLabel) currencyLabel.textContent = sym;
+      if (currencyLabelRate) currencyLabelRate.textContent = sym;
+      if (settingsCurrencyLeft) settingsCurrencyLeft.textContent = sym;
+    }
+
     refreshCategoryDatalist();
     renderMonth();
   </script>
 </body>
 </html>
-
