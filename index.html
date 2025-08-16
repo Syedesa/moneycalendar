@@ -13,6 +13,7 @@
     * { scrollbar-width: thin; }
     .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
     .scroll-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .kbd{border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:.5rem;padding:0 .4rem;font-size:.75rem;background:#f8fafc}
   </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -21,7 +22,7 @@
     <header class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
       <div>
         <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">MoneyCal</h1>
-        <p class="text-slate-500">Calendar-based tracker for your daily earnings and expenses.</p>
+        <p class="text-slate-500">Calendar-based tracker for your daily earnings and expenses. Now with per‑hour jobs & timings.</p>
       </div>
       <div class="flex items-center gap-2">
         <button id="btn-export-json" class="px-3 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow">Export JSON</button>
@@ -119,16 +120,39 @@
           <div>
             <label class="block text-sm text-slate-600">Amount (£)</label>
             <input id="amount" type="number" step="0.01" min="0" required class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+            <p class="text-[11px] text-slate-500 mt-1">If you enter <span class="kbd">Rate</span> + <span class="kbd">Start</span>/<span class="kbd">End</span>, amount auto-calculates.</p>
           </div>
+
           <div>
             <label class="block text-sm text-slate-600">Category</label>
-            <input id="category" list="category-list" placeholder="e.g., Rent, Food, Transport" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+            <input id="category" list="category-list" placeholder="e.g., Rent, Food, Uber, Warehouse" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
             <datalist id="category-list"></datalist>
           </div>
           <div class="sm:col-span-2">
             <label class="block text-sm text-slate-600">Note</label>
             <input id="note" placeholder="Optional details…" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
           </div>
+
+          <!-- Income-only fields -->
+          <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3" id="income-only" hidden>
+            <div>
+              <label class="block text-sm text-slate-600">Job / Source</label>
+              <input id="job" placeholder="Uber, Warehouse, Deliveroo…" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+            </div>
+            <div>
+              <label class="block text-sm text-slate-600">Rate (£/hr)</label>
+              <input id="rate" type="number" step="0.01" min="0" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+            </div>
+            <div>
+              <label class="block text-sm text-slate-600">Start Time</label>
+              <input id="start-time" type="time" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+            </div>
+            <div>
+              <label class="block text-sm text-slate-600">End Time</label>
+              <input id="end-time" type="time" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+            </div>
+          </div>
+
           <div class="sm:col-span-2 flex items-center gap-2">
             <button type="submit" class="px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700">Add Entry</button>
             <button type="button" id="delete-selected" class="px-4 py-2 rounded-2xl bg-rose-600 text-white hover:bg-rose-700 hidden">Delete Selected</button>
@@ -157,7 +181,7 @@
           </div>
           <div>
             <label class="block text-sm text-slate-600">Default Categories (comma-separated)</label>
-            <input id="default-categories" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" placeholder="Rent, Food, Utilities, Transport, Study, Health, Personal" />
+            <input id="default-categories" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" placeholder="Rent, Food, Utilities, Transport, Study, Health, Personal, Uber, Warehouse" />
           </div>
         </div>
         <div class="mt-5 flex items-center justify-end gap-2">
@@ -172,28 +196,32 @@
 
   <script>
     // === Storage Helpers ===
-    const LS_KEY = 'moneycal_entries_v1';
+    const LS_KEY = 'moneycal_entries_v2'; // bumped for new fields
     const LS_PREF = 'moneycal_prefs_v1';
 
     function loadEntries() {
-      const raw = localStorage.getItem(LS_KEY);
-      return raw ? JSON.parse(raw) : [];
+      // migrate v1 if present
+      const v2 = localStorage.getItem(LS_KEY);
+      if (v2) return JSON.parse(v2);
+      const v1 = localStorage.getItem('moneycal_entries_v1');
+      if (v1) {
+        const parsed = JSON.parse(v1);
+        localStorage.setItem(LS_KEY, JSON.stringify(parsed));
+        return parsed;
+      }
+      return [];
     }
-    function saveEntries(entries) {
-      localStorage.setItem(LS_KEY, JSON.stringify(entries));
-    }
+    function saveEntries(entries) { localStorage.setItem(LS_KEY, JSON.stringify(entries)); }
     function loadPrefs() {
       const raw = localStorage.getItem(LS_PREF);
-      return raw ? JSON.parse(raw) : { savingsTarget: 700, categories: ['Rent','Food','Utilities','Transport','Study','Health','Personal','Savings'] };
+      return raw ? JSON.parse(raw) : { savingsTarget: 700, categories: ['Rent','Food','Utilities','Transport','Study','Health','Personal','Savings','Uber','Warehouse'] };
     }
     function savePrefs(prefs) { localStorage.setItem(LS_PREF, JSON.stringify(prefs)); }
 
     // === Date Utilities ===
     function fmtDateISO(d) { return d.toISOString().slice(0,10); }
-    function parseISO(s) { const [y,m,dd] = s.split('-').map(Number); return new Date(y, m-1, dd); }
     function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
     function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth()+1, 0); }
-    function startOfWeek(d) { const x = new Date(d); x.setDate(x.getDate() - x.getDay()); return new Date(x.getFullYear(), x.getMonth(), x.getDate()); }
 
     // === Global State ===
     let state = {
@@ -225,6 +253,17 @@
     const entryForm = document.getElementById('entry-form');
     const entriesList = document.getElementById('entries-list');
     const deleteBtn = document.getElementById('delete-selected');
+
+    // Income-only inputs
+    const incomeOnly = document.getElementById('income-only');
+    const typeSelect = document.getElementById('type');
+    const amountInput = document.getElementById('amount');
+    const categoryInput = document.getElementById('category');
+    const noteInput = document.getElementById('note');
+    const jobInput = document.getElementById('job');
+    const rateInput = document.getElementById('rate');
+    const startTimeInput = document.getElementById('start-time');
+    const endTimeInput = document.getElementById('end-time');
 
     // Settings
     const settingsModal = document.getElementById('settings-modal');
@@ -343,6 +382,8 @@
       drawerDateEl.textContent = new Date(isoDate).toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
       entryDateInput.value = isoDate;
       state.selectedIds.clear();
+      // show/hide income-only block based on current selection
+      toggleIncomeOnly();
       renderEntriesForDate(isoDate);
     }
     function closeDrawer() { drawer.classList.add('hidden'); }
@@ -362,9 +403,15 @@
         const li = document.createElement('li');
         li.className = 'border border-slate-200 rounded-xl p-2 flex items-center justify-between';
         const left = document.createElement('div');
+        const line1 = `${e.type==='income'?'+':'-'}£${Number(e.amount).toFixed(2)} · ${e.category||'—'}`;
+        const extra = [];
+        if (e.job) extra.push(e.job);
+        if (e.rate) extra.push(`£${Number(e.rate).toFixed(2)}/hr`);
+        if (e.startTime && e.endTime) extra.push(`${e.startTime}–${e.endTime}${e.hours?` (${e.hours.toFixed(2)}h)`:''}`);
+        const line2 = [extra.join(' · '), e.note].filter(Boolean).join(' — ');
         left.innerHTML = `
-          <div class='text-sm font-medium ${e.type==='income'?'text-emerald-700':'text-rose-700'}'>${e.type==='income'?'+':'-'}£${Number(e.amount).toFixed(2)} <span class='text-slate-500'>· ${e.category||'—'}</span></div>
-          <div class='text-xs text-slate-500'>${e.note?e.note:'Added'} · ${new Date(e.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+          <div class='text-sm font-medium ${e.type==='income'?'text-emerald-700':'text-rose-700'}'>${line1}</div>
+          <div class='text-xs text-slate-500'>${line2 || 'Added'} · ${new Date(e.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
         `;
         const right = document.createElement('div');
         const cb = document.createElement('input');
@@ -392,6 +439,20 @@
       });
     }
 
+    function computeHours(start, end){
+      if (!start || !end) return 0;
+      const [sh, sm] = start.split(':').map(Number);
+      const [eh, em] = end.split(':').map(Number);
+      let minutes = (eh*60+em) - (sh*60+sm);
+      if (minutes < 0) minutes += 24*60; // overnight shift
+      return minutes / 60;
+    }
+
+    function toggleIncomeOnly(){
+      const isIncome = typeSelect.value === 'income';
+      incomeOnly.hidden = !isIncome;
+    }
+
     // === Event Listeners ===
     document.getElementById('prev-month').addEventListener('click', ()=>{ state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth()-1, 1); renderMonth(); });
     document.getElementById('next-month').addEventListener('click', ()=>{ state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth()+1, 1); renderMonth(); });
@@ -401,21 +462,62 @@
     // Close handlers
     document.querySelectorAll('[data-close]').forEach(el=> el.addEventListener('click', ()=>{ closeDrawer(); settingsModal.classList.add('hidden'); }));
 
+    // Type toggles income-specific fields
+    typeSelect.addEventListener('change', toggleIncomeOnly);
+
+    // Auto-calc amount when rate/start/end present
+    [rateInput, startTimeInput, endTimeInput].forEach(el=>{
+      el.addEventListener('input', ()=>{
+        if (typeSelect.value !== 'income') return;
+        const rate = parseFloat(rateInput.value||'0');
+        const hours = computeHours(startTimeInput.value, endTimeInput.value);
+        if (rate > 0 && hours > 0) {
+          amountInput.value = (rate * hours).toFixed(2);
+          amountInput.classList.add('ring-1','ring-emerald-400');
+        } else {
+          amountInput.classList.remove('ring-1','ring-emerald-400');
+        }
+      });
+    });
+
     // Add entry
     entryForm.addEventListener('submit', (e)=>{
       e.preventDefault();
       const iso = entryDateInput.value || fmtDateISO(new Date());
-      const type = document.getElementById('type').value;
-      const amount = parseFloat(document.getElementById('amount').value || '0');
-      const category = document.getElementById('category').value.trim();
-      const note = document.getElementById('note').value.trim();
+      const type = typeSelect.value;
+      const amount = parseFloat(amountInput.value || '0');
+      const category = (categoryInput.value||'').trim();
+      const note = (noteInput.value||'').trim();
+
       if (!amount || amount <= 0) return alert('Enter a valid amount');
       const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+
       const item = { id, date: iso, type, amount, category, note, createdAt: Date.now() };
+
+      if (type === 'income') {
+        const job = (jobInput.value||'').trim();
+        const rate = parseFloat(rateInput.value||'0');
+        const startTime = startTimeInput.value||'';
+        const endTime = endTimeInput.value||'';
+        const hours = computeHours(startTime, endTime);
+        if (job) item.job = job;
+        if (rate) item.rate = rate;
+        if (startTime) item.startTime = startTime;
+        if (endTime) item.endTime = endTime;
+        if (hours) item.hours = hours;
+      }
+
       state.entries.push(item);
       saveEntries(state.entries);
-      document.getElementById('amount').value = '';
-      document.getElementById('note').value = '';
+
+      // reset minimal fields; keep category list updated
+      amountInput.value = '';
+      noteInput.value = '';
+      jobInput.value = '';
+      rateInput.value = '';
+      startTimeInput.value = '';
+      endTimeInput.value = '';
+
       refreshCategoryDatalist();
       renderEntriesForDate(iso);
       renderMonth();
@@ -460,8 +562,21 @@
     });
 
     document.getElementById('btn-export-csv').addEventListener('click', ()=>{
-      const header = 'id,date,type,amount,category,note,createdAt\n';
-      const lines = state.entries.map(e => [e.id, e.date, e.type, e.amount, JSON.stringify(e.category||''), JSON.stringify(e.note||''), e.createdAt].join(','));
+      const header = 'id,date,type,amount,category,note,job,rate,startTime,endTime,hours,createdAt\n';
+      const lines = state.entries.map(e => [
+        e.id,
+        e.date,
+        e.type,
+        e.amount,
+        JSON.stringify(e.category||''),
+        JSON.stringify(e.note||''),
+        JSON.stringify(e.job||''),
+        e.rate ?? '',
+        e.startTime ?? '',
+        e.endTime ?? '',
+        e.hours ?? '',
+        e.createdAt
+      ].join(','));
       const csv = header + lines.join('\n');
       const blob = new Blob([csv], {type:'text/csv'});
       const url = URL.createObjectURL(blob);
@@ -477,12 +592,35 @@
           if (file.name.endsWith('.json')) {
             const data = JSON.parse(reader.result);
             if (data.entries) state.entries = data.entries; if (data.prefs) state.prefs = data.prefs;
-          } else { // naive CSV import (expects header)
+          } else { // CSV import (expects header)
             const text = String(reader.result);
-            const rows = text.trim().split(/\r?\n/).slice(1);
+            const rows = text.trim().split(/\r?\n/);
+            const header = rows.shift();
+            const cols = header.split(',');
+            const indexOf = (name) => cols.indexOf(name);
+            const idx = {
+              id: indexOf('id'), date: indexOf('date'), type: indexOf('type'), amount: indexOf('amount'),
+              category: indexOf('category'), note: indexOf('note'), job: indexOf('job'), rate: indexOf('rate'),
+              startTime: indexOf('startTime'), endTime: indexOf('endTime'), hours: indexOf('hours'), createdAt: indexOf('createdAt')
+            };
             const items = rows.map(r => {
-              const [id,date,type,amount,category,note,createdAt] = r.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/).map(s=>s.replace(/^\"|\"$/g,''));
-              return { id: id||Math.random().toString(36).slice(2), date, type, amount:Number(amount)||0, category, note, createdAt:Number(createdAt)||Date.now() };
+              // split by commas but keep quoted fields
+              const cells = r.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/).map(s=>s.replace(/^\"|\"$/g,''));
+              const obj = {
+                id: cells[idx.id] || Math.random().toString(36).slice(2),
+                date: cells[idx.date],
+                type: cells[idx.type],
+                amount: Number(cells[idx.amount])||0,
+                category: cells[idx.category] || '',
+                note: cells[idx.note] || '',
+                job: cells[idx.job] || '',
+                rate: cells[idx.rate] ? Number(cells[idx.rate]) : undefined,
+                startTime: cells[idx.startTime] || '',
+                endTime: cells[idx.endTime] || '',
+                hours: cells[idx.hours] ? Number(cells[idx.hours]) : undefined,
+                createdAt: cells[idx.createdAt] ? Number(cells[idx.createdAt]) : Date.now()
+              };
+              return obj;
             });
             state.entries = items;
           }
@@ -502,8 +640,17 @@
     });
 
     // Init
+    function refreshCategoryDatalist(){
+      const dl = document.getElementById('category-list');
+      dl.innerHTML = '';
+      const cats = new Set([...(state.prefs.categories||[])]);
+      for (const e of state.entries) if (e.category) cats.add(e.category);
+      [...cats].sort().forEach(c=>{ const opt = document.createElement('option'); opt.value = c; dl.appendChild(opt); });
+    }
+
     refreshCategoryDatalist();
     renderMonth();
   </script>
 </body>
 </html>
+
