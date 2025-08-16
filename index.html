@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MoneyCal — Daily Income & Expense Tracker</title>
+  <meta name="description" content="Calendar-based daily tracker for income & expenses. Local, private, and GitHub Pages ready." />
+  <!-- Tailwind via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%2300a389' d='M40 64h176v128H40z'/%3E%3Cpath fill='%23fff' d='M64 104h72v16H64zm0 32h48v16H64zm96-32h32v16h-32zm0 32h32v16h-32z'/%3E%3C/svg%3E" />
+  <style>
+    /* Scrollbar tweaks for nicer feel */
+    * { scrollbar-width: thin; }
+    .scroll-thin::-webkit-scrollbar { height: 8px; width: 8px; }
+    .scroll-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="max-w-6xl mx-auto p-4 sm:p-6">
+    <!-- Header -->
+    <header class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">MoneyCal</h1>
+        <p class="text-slate-500">Calendar-based tracker for your daily earnings and expenses.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="btn-export-json" class="px-3 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700 shadow">Export JSON</button>
+        <label class="px-3 py-2 rounded-2xl bg-slate-200 hover:bg-slate-300 shadow cursor-pointer">
+          <input id="import-file" type="file" accept=".json,.csv" class="hidden" />Import
+        </label>
+        <button id="btn-export-csv" class="px-3 py-2 rounded-2xl bg-white border border-slate-300 hover:bg-slate-100 shadow">Export CSV</button>
+        <button id="btn-settings" class="px-3 py-2 rounded-2xl bg-white border border-slate-300 hover:bg-slate-100 shadow">Settings</button>
+      </div>
+    </header>
+
+    <!-- Month Nav & Summary -->
+    <section class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div class="lg:col-span-2 bg-white rounded-2xl shadow p-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <button id="prev-month" class="p-2 rounded-xl hover:bg-slate-100" title="Previous month">⟨</button>
+            <h2 id="month-label" class="text-xl font-semibold">Month YYYY</h2>
+            <button id="next-month" class="p-2 rounded-xl hover:bg-slate-100" title="Next month">⟩</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="today-btn" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200">Today</button>
+            <button id="add-entry-today" class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">Add for Today</button>
+          </div>
+        </div>
+
+        <!-- Calendar Grid -->
+        <div class="mt-4 grid grid-cols-7 text-center text-xs font-medium text-slate-500">
+          <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+        </div>
+        <div id="calendar" class="mt-2 grid grid-cols-7 gap-1 sm:gap-2"></div>
+        <p class="mt-2 text-xs text-slate-500">Tip: Click a date to view or add entries.</p>
+      </div>
+
+      <!-- Summary Card -->
+      <aside class="bg-white rounded-2xl shadow p-4 space-y-4">
+        <h3 class="text-lg font-semibold">This Month Summary</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-xl bg-emerald-50 p-3">
+            <div class="text-sm text-emerald-700">Income</div>
+            <div id="sum-income" class="text-2xl font-bold">£0</div>
+          </div>
+          <div class="rounded-xl bg-rose-50 p-3">
+            <div class="text-sm text-rose-700">Expenses</div>
+            <div id="sum-expenses" class="text-2xl font-bold">£0</div>
+          </div>
+          <div class="rounded-xl bg-sky-50 p-3">
+            <div class="text-sm text-sky-700">Net</div>
+            <div id="sum-net" class="text-2xl font-bold">£0</div>
+          </div>
+          <div class="rounded-xl bg-violet-50 p-3">
+            <div class="text-sm text-violet-700">Savings Target</div>
+            <div class="flex items-baseline gap-2">
+              <div id="sum-target" class="text-xl font-semibold">£700</div>
+              <span id="target-badge" class="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">Default</span>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-3">
+          <div class="text-sm text-slate-600">Weekly Averages</div>
+          <div class="mt-1 text-sm">
+            <span id="avg-week-income" class="font-medium">£0</span> in / <span id="avg-week-expenses" class="font-medium">£0</span> out
+          </div>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-3">
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-slate-600">Year-to-Date (YTD)</div>
+            <button id="reset-data" class="text-xs text-rose-600 hover:underline" title="Clear all data (local only)">Reset All</button>
+          </div>
+          <div class="mt-1 text-sm">
+            Income: <span id="ytd-income" class="font-medium">£0</span> · Expenses: <span id="ytd-expenses" class="font-medium">£0</span> · Net: <span id="ytd-net" class="font-medium">£0</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- Day Drawer / Modal -->
+    <div id="day-drawer" class="fixed inset-0 hidden">
+      <div class="absolute inset-0 bg-black/30" data-close></div>
+      <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl p-4 sm:rounded-l-3xl overflow-y-auto scroll-thin">
+        <div class="flex items-center justify-between">
+          <h3 id="drawer-date" class="text-lg font-semibold">Date</h3>
+          <button class="p-2 rounded-xl hover:bg-slate-100" data-close>✕</button>
+        </div>
+
+        <form id="entry-form" class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input type="hidden" id="entry-date" />
+          <div>
+            <label class="block text-sm text-slate-600">Type</label>
+            <select id="type" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300">
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Amount (£)</label>
+            <input id="amount" type="number" step="0.01" min="0" required class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Category</label>
+            <input id="category" list="category-list" placeholder="e.g., Rent, Food, Transport" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+            <datalist id="category-list"></datalist>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm text-slate-600">Note</label>
+            <input id="note" placeholder="Optional details…" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" />
+          </div>
+          <div class="sm:col-span-2 flex items-center gap-2">
+            <button type="submit" class="px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700">Add Entry</button>
+            <button type="button" id="delete-selected" class="px-4 py-2 rounded-2xl bg-rose-600 text-white hover:bg-rose-700 hidden">Delete Selected</button>
+          </div>
+        </form>
+
+        <div class="mt-6">
+          <h4 class="text-sm font-semibold text-slate-600">Entries for this date</h4>
+          <ul id="entries-list" class="mt-2 space-y-2"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 hidden">
+      <div class="absolute inset-0 bg-black/30" data-close></div>
+      <div class="absolute left-1/2 top-16 -translate-x-1/2 w-[95%] max-w-lg bg-white rounded-3xl shadow-xl p-5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Settings</h3>
+          <button class="p-2 rounded-xl hover:bg-slate-100" data-close>✕</button>
+        </div>
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm text-slate-600">Monthly Savings Target (£)</label>
+            <input id="savings-target" type="number" step="1" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" placeholder="700" />
+          </div>
+          <div>
+            <label class="block text-sm text-slate-600">Default Categories (comma-separated)</label>
+            <input id="default-categories" class="w-full mt-1 px-3 py-2 rounded-xl border border-slate-300" placeholder="Rent, Food, Utilities, Transport, Study, Health, Personal" />
+          </div>
+        </div>
+        <div class="mt-5 flex items-center justify-end gap-2">
+          <button class="px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200" data-close>Close</button>
+          <button id="save-settings" class="px-4 py-2 rounded-2xl bg-emerald-600 text-white hover:bg-emerald-700">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="mt-10 text-center text-xs text-slate-500">All data is stored locally in your browser (no cloud). Export regularly for backup.</footer>
+  </div>
+
+  <script>
+    // === Storage Helpers ===
+    const LS_KEY = 'moneycal_entries_v1';
+    const LS_PREF = 'moneycal_prefs_v1';
+
+    function loadEntries() {
+      const raw = localStorage.getItem(LS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }
+    function saveEntries(entries) {
+      localStorage.setItem(LS_KEY, JSON.stringify(entries));
+    }
+    function loadPrefs() {
+      const raw = localStorage.getItem(LS_PREF);
+      return raw ? JSON.parse(raw) : { savingsTarget: 700, categories: ['Rent','Food','Utilities','Transport','Study','Health','Personal','Savings'] };
+    }
+    function savePrefs(prefs) { localStorage.setItem(LS_PREF, JSON.stringify(prefs)); }
+
+    // === Date Utilities ===
+    function fmtDateISO(d) { return d.toISOString().slice(0,10); }
+    function parseISO(s) { const [y,m,dd] = s.split('-').map(Number); return new Date(y, m-1, dd); }
+    function startOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+    function endOfMonth(d) { return new Date(d.getFullYear(), d.getMonth()+1, 0); }
+    function startOfWeek(d) { const x = new Date(d); x.setDate(x.getDate() - x.getDay()); return new Date(x.getFullYear(), x.getMonth(), x.getDate()); }
+
+    // === Global State ===
+    let state = {
+      today: new Date(),
+      cursor: new Date(), // month shown
+      entries: loadEntries(),
+      prefs: loadPrefs(),
+      selectedIds: new Set(),
+    };
+
+    // === UI Elements ===
+    const monthLabel = document.getElementById('month-label');
+    const calendarGrid = document.getElementById('calendar');
+    const sumIncomeEl = document.getElementById('sum-income');
+    const sumExpensesEl = document.getElementById('sum-expenses');
+    const sumNetEl = document.getElementById('sum-net');
+    const avgWeekIncomeEl = document.getElementById('avg-week-income');
+    const avgWeekExpensesEl = document.getElementById('avg-week-expenses');
+    const ytdIncomeEl = document.getElementById('ytd-income');
+    const ytdExpensesEl = document.getElementById('ytd-expenses');
+    const ytdNetEl = document.getElementById('ytd-net');
+    const sumTargetEl = document.getElementById('sum-target');
+    const targetBadge = document.getElementById('target-badge');
+
+    // Drawer
+    const drawer = document.getElementById('day-drawer');
+    const drawerDateEl = document.getElementById('drawer-date');
+    const entryDateInput = document.getElementById('entry-date');
+    const entryForm = document.getElementById('entry-form');
+    const entriesList = document.getElementById('entries-list');
+    const deleteBtn = document.getElementById('delete-selected');
+
+    // Settings
+    const settingsModal = document.getElementById('settings-modal');
+    const savingsTargetInput = document.getElementById('savings-target');
+    const defaultCategoriesInput = document.getElementById('default-categories');
+
+    // === Rendering ===
+    function renderMonth() {
+      const d = state.cursor;
+      const monthName = d.toLocaleString(undefined, { month: 'long' });
+      monthLabel.textContent = `${monthName} ${d.getFullYear()}`;
+
+      // Calendar cells
+      calendarGrid.innerHTML = '';
+      const first = startOfMonth(d);
+      const last = endOfMonth(d);
+      const offset = first.getDay();
+      const daysInMonth = last.getDate();
+
+      // Fill leading blanks
+      for (let i=0; i<offset; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'aspect-square rounded-xl bg-transparent';
+        calendarGrid.appendChild(cell);
+      }
+
+      // Make a quick date-key -> totals map for badges
+      const map = {};
+      for (const e of state.entries) {
+        const mm = new Date(e.date);
+        if (mm.getMonth() === d.getMonth() && mm.getFullYear() === d.getFullYear()) {
+          const k = e.date;
+          if (!map[k]) map[k] = { income:0, expense:0 };
+          map[k][e.type] += Number(e.amount) || 0;
+        }
+      }
+
+      for (let day=1; day<=daysInMonth; day++) {
+        const date = new Date(d.getFullYear(), d.getMonth(), day);
+        const iso = fmtDateISO(date);
+        const isToday = fmtDateISO(date) === fmtDateISO(state.today);
+
+        const wrapper = document.createElement('button');
+        wrapper.className = 'aspect-square rounded-xl bg-white hover:bg-slate-50 border border-slate-200 p-2 text-left relative';
+        if (isToday) wrapper.classList.add('ring-2','ring-emerald-500');
+        wrapper.title = 'Click to add/view entries';
+        wrapper.addEventListener('click', () => openDrawer(iso));
+
+        const dayNum = document.createElement('div');
+        dayNum.textContent = String(day);
+        dayNum.className = 'text-sm font-semibold';
+        wrapper.appendChild(dayNum);
+
+        if (map[iso]) {
+          const badge = document.createElement('div');
+          const inc = map[iso].income; const exp = map[iso].expense;
+          badge.className = 'absolute bottom-1 right-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 border border-slate-200';
+          badge.textContent = `+£${inc.toFixed(0)} / -£${exp.toFixed(0)}`;
+          wrapper.appendChild(badge);
+        }
+
+        calendarGrid.appendChild(wrapper);
+      }
+
+      renderSummary();
+    }
+
+    function monthEntries(year, month) {
+      return state.entries.filter(e => {
+        const d = new Date(e.date);
+        return d.getFullYear()===year && d.getMonth()===month;
+      });
+    }
+
+    function renderSummary() {
+      const y = state.cursor.getFullYear();
+      const m = state.cursor.getMonth();
+      const list = monthEntries(y, m);
+
+      let income=0, expenses=0;
+      for (const e of list) {
+        const amt = Number(e.amount)||0;
+        if (e.type==='income') income += amt; else expenses += amt;
+      }
+      sumIncomeEl.textContent = `£${income.toFixed(2)}`;
+      sumExpensesEl.textContent = `£${expenses.toFixed(2)}`;
+      sumNetEl.textContent = `£${(income - expenses).toFixed(2)}`;
+
+      // Weekly averages (approx 4.345 weeks per month for better avg)
+      const weeks = 4.345;
+      avgWeekIncomeEl.textContent = `£${(income/weeks).toFixed(2)}`;
+      avgWeekExpensesEl.textContent = `£${(expenses/weeks).toFixed(2)}`;
+
+      // YTD
+      const startYear = new Date(y, 0, 1);
+      const endYear = new Date(y, 11, 31);
+      let yi=0, ye=0;
+      for (const e of state.entries) {
+        const d = new Date(e.date);
+        if (d>=startYear && d<=endYear) {
+          if (e.type==='income') yi += Number(e.amount)||0; else ye += Number(e.amount)||0;
+        }
+      }
+      ytdIncomeEl.textContent = `£${yi.toFixed(2)}`;
+      ytdExpensesEl.textContent = `£${ye.toFixed(2)}`;
+      ytdNetEl.textContent = `£${(yi-ye).toFixed(2)}`;
+
+      // Target
+      sumTargetEl.textContent = `£${Number(state.prefs.savingsTarget||700).toFixed(0)}`;
+      targetBadge.textContent = state.prefs.savingsTarget ? 'Custom' : 'Default';
+    }
+
+    // Drawer logic
+    function openDrawer(isoDate) {
+      drawer.classList.remove('hidden');
+      drawerDateEl.textContent = new Date(isoDate).toLocaleDateString(undefined, { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+      entryDateInput.value = isoDate;
+      state.selectedIds.clear();
+      renderEntriesForDate(isoDate);
+    }
+    function closeDrawer() { drawer.classList.add('hidden'); }
+
+    function renderEntriesForDate(isoDate) {
+      const items = state.entries.filter(e => e.date === isoDate).sort((a,b)=>a.createdAt-b.createdAt);
+      entriesList.innerHTML = '';
+      if (items.length===0) {
+        const empty = document.createElement('div');
+        empty.className = 'text-sm text-slate-500 mt-2';
+        empty.textContent = 'No entries yet. Add one above!';
+        entriesList.appendChild(empty);
+        deleteBtn.classList.add('hidden');
+        return;
+      }
+      for (const e of items) {
+        const li = document.createElement('li');
+        li.className = 'border border-slate-200 rounded-xl p-2 flex items-center justify-between';
+        const left = document.createElement('div');
+        left.innerHTML = `
+          <div class='text-sm font-medium ${e.type==='income'?'text-emerald-700':'text-rose-700'}'>${e.type==='income'?'+':'-'}£${Number(e.amount).toFixed(2)} <span class='text-slate-500'>· ${e.category||'—'}</span></div>
+          <div class='text-xs text-slate-500'>${e.note?e.note:'Added'} · ${new Date(e.createdAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+        `;
+        const right = document.createElement('div');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'h-4 w-4';
+        cb.addEventListener('change', (ev)=>{
+          if (ev.target.checked) state.selectedIds.add(e.id); else state.selectedIds.delete(e.id);
+          deleteBtn.classList.toggle('hidden', state.selectedIds.size===0);
+        });
+        right.appendChild(cb);
+        li.append(left, right);
+        entriesList.appendChild(li);
+      }
+      deleteBtn.classList.toggle('hidden', state.selectedIds.size===0);
+    }
+
+    // Populate datalist categories
+    function refreshCategoryDatalist() {
+      const dl = document.getElementById('category-list');
+      dl.innerHTML = '';
+      const cats = new Set([...(state.prefs.categories||[])]);
+      for (const e of state.entries) if (e.category) cats.add(e.category);
+      [...cats].sort().forEach(c=>{
+        const opt = document.createElement('option'); opt.value = c; dl.appendChild(opt);
+      });
+    }
+
+    // === Event Listeners ===
+    document.getElementById('prev-month').addEventListener('click', ()=>{ state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth()-1, 1); renderMonth(); });
+    document.getElementById('next-month').addEventListener('click', ()=>{ state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth()+1, 1); renderMonth(); });
+    document.getElementById('today-btn').addEventListener('click', ()=>{ state.cursor = new Date(); renderMonth(); });
+    document.getElementById('add-entry-today').addEventListener('click', ()=>{ openDrawer(fmtDateISO(new Date())); });
+
+    // Close handlers
+    document.querySelectorAll('[data-close]').forEach(el=> el.addEventListener('click', ()=>{ closeDrawer(); settingsModal.classList.add('hidden'); }));
+
+    // Add entry
+    entryForm.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const iso = entryDateInput.value || fmtDateISO(new Date());
+      const type = document.getElementById('type').value;
+      const amount = parseFloat(document.getElementById('amount').value || '0');
+      const category = document.getElementById('category').value.trim();
+      const note = document.getElementById('note').value.trim();
+      if (!amount || amount <= 0) return alert('Enter a valid amount');
+      const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+      const item = { id, date: iso, type, amount, category, note, createdAt: Date.now() };
+      state.entries.push(item);
+      saveEntries(state.entries);
+      document.getElementById('amount').value = '';
+      document.getElementById('note').value = '';
+      refreshCategoryDatalist();
+      renderEntriesForDate(iso);
+      renderMonth();
+    });
+
+    // Delete selected
+    deleteBtn.addEventListener('click', ()=>{
+      if (state.selectedIds.size===0) return;
+      if (!confirm('Delete selected entries?')) return;
+      state.entries = state.entries.filter(e => !state.selectedIds.has(e.id));
+      saveEntries(state.entries);
+      state.selectedIds.clear();
+      renderEntriesForDate(entryDateInput.value);
+      renderMonth();
+    });
+
+    // Settings open/save
+    document.getElementById('btn-settings').addEventListener('click', ()=>{
+      const p = state.prefs || {};
+      savingsTargetInput.value = p.savingsTarget ?? 700;
+      defaultCategoriesInput.value = (p.categories||[]).join(', ');
+      settingsModal.classList.remove('hidden');
+    });
+    document.getElementById('save-settings').addEventListener('click', ()=>{
+      const target = parseFloat(savingsTargetInput.value || '700');
+      const cats = defaultCategoriesInput.value.split(',').map(s=>s.trim()).filter(Boolean);
+      state.prefs = { savingsTarget: target, categories: cats.length?cats:state.prefs.categories };
+      savePrefs(state.prefs);
+      settingsModal.classList.add('hidden');
+      renderSummary();
+      refreshCategoryDatalist();
+    });
+
+    // Export / Import
+    document.getElementById('btn-export-json').addEventListener('click', ()=>{
+      const payload = { entries: state.entries, prefs: state.prefs, exportedAt: new Date().toISOString() };
+      const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'moneycal_backup.json'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    });
+
+    document.getElementById('btn-export-csv').addEventListener('click', ()=>{
+      const header = 'id,date,type,amount,category,note,createdAt\n';
+      const lines = state.entries.map(e => [e.id, e.date, e.type, e.amount, JSON.stringify(e.category||''), JSON.stringify(e.note||''), e.createdAt].join(','));
+      const csv = header + lines.join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'moneycal_entries.csv'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    });
+
+    document.getElementById('import-file').addEventListener('change', (ev)=>{
+      const file = ev.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          if (file.name.endsWith('.json')) {
+            const data = JSON.parse(reader.result);
+            if (data.entries) state.entries = data.entries; if (data.prefs) state.prefs = data.prefs;
+          } else { // naive CSV import (expects header)
+            const text = String(reader.result);
+            const rows = text.trim().split(/\r?\n/).slice(1);
+            const items = rows.map(r => {
+              const [id,date,type,amount,category,note,createdAt] = r.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/).map(s=>s.replace(/^\"|\"$/g,''));
+              return { id: id||Math.random().toString(36).slice(2), date, type, amount:Number(amount)||0, category, note, createdAt:Number(createdAt)||Date.now() };
+            });
+            state.entries = items;
+          }
+          saveEntries(state.entries); savePrefs(state.prefs);
+          refreshCategoryDatalist(); renderMonth(); alert('Import successful');
+        } catch (err) { alert('Import failed: '+err.message); }
+      };
+      reader.readAsText(file);
+      ev.target.value = '';
+    });
+
+    document.getElementById('reset-data').addEventListener('click', ()=>{
+      if (!confirm('This will erase all entries & preferences stored locally. Proceed?')) return;
+      localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_PREF);
+      state.entries = []; state.prefs = loadPrefs();
+      refreshCategoryDatalist(); renderMonth();
+    });
+
+    // Init
+    refreshCategoryDatalist();
+    renderMonth();
+  </script>
+</body>
+</html>
