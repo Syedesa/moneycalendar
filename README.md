@@ -18,11 +18,6 @@ Perfect for students, freelancers, and anyone who wants to manage money date-wis
 
 ---
 
-## 📸 Demo Screenshot
-(Add a screenshot here after you host it on GitHub Pages)
-
----
-
 ## ⚡ How to Use
 1. Open the app in your browser.  
 2. Click a date → add **Income** or **Expense** with category & amount.  
@@ -36,4 +31,4 @@ Perfect for students, freelancers, and anyone who wants to manage money date-wis
 1. Fork or download this repo.  
 2. Upload `index.html` to your repo root.  
 3. Go to **Settings → Pages** → set branch to `main` and folder `/root`.  
-4. Your tracker will be live at:  
+4. Your tracker will be live.
